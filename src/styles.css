@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+/* Base tweaks to mirror prior minimal styles */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { @apply m-0 font-sans leading-relaxed text-gray-900 bg-white; }
+button, select, input, textarea { font: inherit; }
