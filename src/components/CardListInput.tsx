@@ -53,13 +53,18 @@ export function CardListInput({ value, onChange: onChangeProp }: Props) {
   }
 
   const addBelowOrFocusBottom = (afterId: number) => {
-  const id = nextId.current++
-  const idx = items.findIndex(it => it.id === afterId)
-  const next = [...items]
-  next.splice(idx + 1, 0, { id, value: '' })
-  setItems(next)
-  emit(next)
-  pendingFocusId.current = id
+    if (items[items.length - 1].value === '') {
+      const lastId = items[items.length - 1].id
+      const el = inputRefs.current.get(lastId)
+      if (el) el.focus()
+      else pendingFocusId.current = lastId
+      return
+    }
+    const newId = nextId.current++
+    const next = [...items, { id: newId, value: '' }]
+    setItems(next)
+    emit(next)
+    pendingFocusId.current = newId
   }
 
   const removeAndFocusPrev = (id: number) => {
