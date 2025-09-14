@@ -21,6 +21,20 @@ export function CardListInput({ value, onChange: onChangeProp }: Props) {
   // Monotonic id generator seeded from initial items to avoid collisions.
   const nextId = useRef(initialItems.length > 0 ? Math.max(...initialItems.map(i => i.id)) + 1 : 1)
 
+  // When the external value changes (e.g., loaded from localStorage),
+  // sync our internal list to reflect it so the UI shows saved cards.
+  useEffect(() => {
+    const external = (value ?? '')
+    const current = items.map(i => i.value).join('\n')
+    if (external !== current) {
+      const lines = external.split(/\r?\n/)
+      const vals = lines.length > 0 ? lines : ['']
+      const next: Item[] = vals.map((v, i) => ({ id: i, value: v }))
+      setItems(next)
+      nextId.current = next.length > 0 ? Math.max(...next.map(i => i.id)) + 1 : 1
+    }
+  }, [value])
+
   // Map of input elements by item id for focus management
   const inputRefs = useRef(new Map<number, HTMLInputElement>())
   const pendingFocusId = useRef<number | null>(null)
@@ -89,6 +103,41 @@ export function CardListInput({ value, onChange: onChangeProp }: Props) {
   const onSubmit = (id: number) => addBelowOrFocusBottom(id)
   const onErase = (id: number) => removeAndFocusPrev(id)
 
+  // Handle pasting multiple lines into a single input: split into rows
+  const onPaste = (id: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text') ?? ''
+    if (!text) return
+    const lines = text.replace(/\r\n?/g, '\n').split('\n')
+    if (lines.length <= 1) return // single-line paste behaves normally
+
+    e.preventDefault()
+
+    // Update current row with first line, insert additional rows below
+    const idx = items.findIndex(it => it.id === id)
+    if (idx === -1) return
+
+    const first = lines[0]
+    const rest = lines.slice(1)
+
+    const updatedCurrent = items.map(it => (it.id === id ? { ...it, value: first } : it))
+
+    // Build new items for remaining lines
+    const newItems: Item[] = rest.map(v => ({ id: nextId.current++, value: v }))
+
+    const nextList = [
+      ...updatedCurrent.slice(0, idx + 1),
+      ...newItems,
+      ...updatedCurrent.slice(idx + 1),
+    ]
+
+    setItems(nextList)
+    emit(nextList)
+
+    // Focus the last inserted item if any, otherwise current
+    const focusId = newItems.length > 0 ? newItems[newItems.length - 1].id : id
+    focusOrQueue(focusId)
+  }
+
   return (
     <div className="border border-gray-300 rounded p-2">
       <label className="block font-semibold mb-1.5">Card List</label>
@@ -101,6 +150,7 @@ export function CardListInput({ value, onChange: onChangeProp }: Props) {
           onChange={onChange}
           onSubmit={onSubmit}
           onErase={onErase}
+          onPaste={(evt) => onPaste(item.id, evt)}
           inputRef={setInputRef(item.id)}
         />
       ))}

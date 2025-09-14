@@ -15,6 +15,8 @@ type Options = {
 export async function buildLayout(images: CardImage[], opts: Options): Promise<LayoutPages> {
   // 3x3 grid; placeholder coordinates; preview uses only the image URLs
   const perPage = 9
+  // 1x1 transparent GIF for empty slots on back pages to preserve grid positions
+  const EMPTY_SLOT_URL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
   const pages: LayoutPages = []
   for (let i = 0; i < images.length; i += perPage) {
     const slice = images.slice(i, i + perPage)
@@ -26,13 +28,19 @@ export async function buildLayout(images: CardImage[], opts: Options): Promise<L
     // Back sheet: reverse each row (3 columns) but keep row order to align with duplex printing
     const cols = 3
     const rows = Math.ceil(slice.length / cols)
-  const backImages: { url: string; x: number; y: number; w: number; h: number; name?: string }[] = []
-  for (let r = 0; r < rows; r++) {
+    const backImages: { url: string; x: number; y: number; w: number; h: number; name?: string }[] = []
+    for (let r = 0; r < rows; r++) {
       const start = r * cols
       const row = slice.slice(start, start + cols)
-      const reversedRow = row.slice().reverse()
+      // Pad incomplete rows to 3 with nulls so reversal preserves empty slots
+      const paddedRow: Array<CardImage | null> = row.concat(Array(Math.max(0, cols - row.length)).fill(null))
+      const reversedRow = paddedRow.slice().reverse()
       for (const c of reversedRow) {
-  backImages.push({ url: ensureCorsSafe(c.backUrl || opts.defaultBack || c.frontUrl), x: 0, y: 0, w: 0, h: 0, name: c.name })
+        if (c === null) {
+          backImages.push({ url: EMPTY_SLOT_URL, x: 0, y: 0, w: 0, h: 0 })
+        } else {
+          backImages.push({ url: ensureCorsSafe(c.backUrl || opts.defaultBack || c.frontUrl), x: 0, y: 0, w: 0, h: 0, name: c.name })
+        }
       }
     }
     const back = {

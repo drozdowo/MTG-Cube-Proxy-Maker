@@ -75,6 +75,7 @@ const CardEntry: React.FC<CardEntryProps> = ({
       value={internalValue}
       onChange={handleChange}
       onKeyDown={handleKeyDown}
+  onPaste={onPaste}
       placeholder={placeholder}
       style={{ width: '100%', height: 32, fontSize: 24, lineHeight: '32px' }}
       className={className}

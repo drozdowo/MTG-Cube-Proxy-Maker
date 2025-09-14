@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CardListInput } from '@/components/CardListInput'
 import { BackPicker } from '@/components/CardBack/BackPicker'
 import { OptionsPanel } from '@/components/Options'
@@ -17,7 +17,7 @@ import { ensureCorsSafe } from '@/lib/image'
 // Use shared helper for CORS-safe image URLs
 
 export function App() {
-  const [raw, setRaw] = useState('Lightning Bolt\nCounterspell')
+  const [raw, setRaw] = useState(``)
   const [defaultBack, setDefaultBack] = useState<string | null>(cardback)
   const [options, setOptions] = useState<ExportOptions>({
     dpi: 600,
@@ -40,10 +40,66 @@ export function App() {
   const [pickerCardName, setPickerCardName] = useState<string | null>(null)
   const [pickerTarget, setPickerTarget] = useState<{ pageNumber: number; cardNumber: number } | null>(null)
 
+  // Persist card list to localStorage and hydrate on load
+  const STORAGE_KEY = 'mtgpm:cardlist'
+  const hydratedRef = useRef(false)
+  const shouldAutoGenerateRef = useRef(false)
+
+  // Hydrate from localStorage once on mount
+  useEffect(() => {
+    if (hydratedRef.current) return
+    hydratedRef.current = true
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved && saved.trim()) {
+        setRaw(saved)
+        // Trigger a single auto-generate after parse updates
+        shouldAutoGenerateRef.current = true
+      }
+    } catch {
+      // ignore storage errors (private mode, etc.)
+    }
+  }, [])
+
+  // Save changes to localStorage (skip empty)
+  useEffect(() => {
+    try {
+      const text = (raw ?? '').trim()
+      if (text) {
+        localStorage.setItem(STORAGE_KEY, raw)
+      } else {
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [raw])
+
+  // After hydration, auto-generate once if a saved list existed
+  useEffect(() => {
+    if (!shouldAutoGenerateRef.current) return
+    if (!parsed.items || parsed.items.length === 0) return
+    // Clear flag first to avoid accidental double runs
+    shouldAutoGenerateRef.current = false
+    // Fire and forget
+    handleGenerate()
+  }, [parsed])
+
   async function handleGenerate() {
     setBusy(true)
     setIssues([])
     try {
+      // Persist the current card list explicitly on generate
+      try {
+        const text = (raw ?? '').trim()
+        if (text) {
+          localStorage.setItem(STORAGE_KEY, raw)
+        } else {
+          localStorage.removeItem(STORAGE_KEY)
+        }
+      } catch {
+        // ignore storage errors
+      }
       console.log(parsed.items)
       const imgs = await scryfallFetch(parsed.items)
   const layout = await buildLayout(imgs, { ...options, defaultBack })
@@ -56,10 +112,9 @@ export function App() {
     }
   }
 
-  async function handleExport(kind: 'pdf' | 'png') {
+  async function handleExport() {
     if (!pages) return
-    if (kind === 'pdf') await exportToPdf(pages, options)
-    else await exportToPngs(pages, options)
+    await exportToPngs(pages, options)
   }
 
   function openPicker(pageNumber: number, cardNumber: number, cardName?: string) {
@@ -81,22 +136,19 @@ export function App() {
     <div className="grid [grid-template-columns:360px_1fr] gap-4 p-4">
       <div className="grid gap-3 content-start">
         <CardListInput value={raw} onChange={setRaw} errors={parsed.errors} />
+        <button className="w-full px-3 py-1.5 rounded bg-red-400 text-white" onClick={() => {
+          setRaw('')
+          handleGenerate()
+        }}>Clear</button>
         <BackPicker value={defaultBack} onChange={setDefaultBack} />
         <OptionsPanel value={options} onChange={setOptions} onGenerate={handleGenerate} busy={busy} />
         <div className="flex gap-2">
           <button
-            className="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700"
-            onClick={() => handleExport('pdf')}
+            className="w-full px-3 py-1.5 rounded bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700"
+            onClick={() => handleExport()}
             disabled={!pages || busy}
           >
-            Export PDF
-          </button>
-          <button
-            className="px-3 py-1.5 rounded bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700"
-            onClick={() => handleExport('png')}
-            disabled={!pages || busy}
-          >
-            Export PNG
+            Export
           </button>
         </div>
         {issues.length > 0 && (
