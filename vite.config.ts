@@ -11,4 +11,13 @@ export default defineConfig({
       '@': url.fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    proxy: {
+      '/scryfall': {
+        target: 'https://cards.scryfall.io',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/scryfall/, ''),
+      },
+    },
+  },
 })

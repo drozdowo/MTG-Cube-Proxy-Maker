@@ -1,4 +1,5 @@
 import { cache } from '@/lib/cache'
+import { toCorsSafeImageUrl } from '@/lib/image'
 import type { ParsedItem, CardImage } from '@/lib/types'
 import type { ScryfallCard } from '@/lib/scryfall/model'
 
@@ -112,6 +113,8 @@ async function fetchWithRetry(url: string, opts?: FetchOpts): Promise<Response |
   return null
 }
 
+// Use shared helper instead of local dev-only proxy
+
 function parseScryfallCard(data: any): ScryfallCard | null {
   // Prefer PNG image_uris.png; fall back to large or normal
   let front: string | undefined
@@ -124,13 +127,13 @@ function parseScryfallCard(data: any): ScryfallCard | null {
   if (!front && Array.isArray(data?.card_faces)) {
     const f0 = data.card_faces[0]
     const f1 = data.card_faces[1]
-    front = f0?.image_uris?.png || f0?.image_uris?.large || f0?.image_uris?.normal
-    back = f1?.image_uris?.png || f1?.image_uris?.large || f1?.image_uris?.normal || null
+  front = f0?.image_uris?.png || f0?.image_uris?.large || f0?.image_uris?.normal
+  back = f1?.image_uris?.png || f1?.image_uris?.large || f1?.image_uris?.normal || null
   }
 
   if (!front) return null
   const set: string = data.set || 'unk'
-  return { name: data.name, set, frontImage: front, backImage: back ?? null }
+  return { name: data.name, set, frontImage: toCorsSafeImageUrl(front), backImage: back ? toCorsSafeImageUrl(back) : null }
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -227,8 +230,8 @@ export async function scryfallService(items: ParsedItem[]): Promise<CardImage[]>
       results.push({
         id: `${card.set}-${idBase}-a`,
         name: card.name,
-        frontUrl: card.card_faces[0].image_uris.png,
-        backUrl: card.card_faces[1].image_uris.png ?? null,
+        frontUrl: toCorsSafeImageUrl(card.card_faces[0].image_uris.png),
+        backUrl: card.card_faces[1].image_uris.png ? toCorsSafeImageUrl(card.card_faces[1].image_uris.png) : null,
       })
     } else if (card && !card.card_faces) {
       results.push({

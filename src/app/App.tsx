@@ -3,16 +3,21 @@ import { CardListInput } from '@/components/CardListInput'
 import { BackPicker } from '@/components/CardBack/BackPicker'
 import { OptionsPanel } from '@/components/Options'
 import { Preview } from '@/components/Preview'
+import { CardArtSelector } from '@/components/CardArtSelector'
 import { parseInput } from '@/lib/parse'
 import { scryfallFetch } from '@/lib/scryfall'
 import { buildLayout } from '@/lib/layout'
 import { exportToPdf, exportToPngs } from '@/lib/export'
+import { pageService } from '@/lib/pageService'
 import type { LayoutPages } from '@/lib/types'
 import type { ExportOptions } from '@/lib/types'
 import cardback from '../components/CardBack/cardback.jpg' // Ensure webpack includes default back image
+import { ensureCorsSafe } from '@/lib/image'
+
+// Use shared helper for CORS-safe image URLs
 
 export function App() {
-  const [raw, setRaw] = useState('Lightning Bolt\nCounterspell\nToken: Saproling')
+  const [raw, setRaw] = useState('Lightning Bolt\nCounterspell')
   const [defaultBack, setDefaultBack] = useState<string | null>(cardback)
   const [options, setOptions] = useState<ExportOptions>({
     dpi: 600,
@@ -30,14 +35,20 @@ export function App() {
   const [pages, setPages] = useState<LayoutPages | null>(null)
   const [issues, setIssues] = useState<string[]>([])
 
+  // Modal state for picking alternate art
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerCardName, setPickerCardName] = useState<string | null>(null)
+  const [pickerTarget, setPickerTarget] = useState<{ pageNumber: number; cardNumber: number } | null>(null)
+
   async function handleGenerate() {
     setBusy(true)
     setIssues([])
     try {
       console.log(parsed.items)
       const imgs = await scryfallFetch(parsed.items)
-      const layout = await buildLayout(imgs, { ...options, defaultBack })
-      setPages(layout)
+  const layout = await buildLayout(imgs, { ...options, defaultBack })
+  setPages(layout)
+  pageService.setFromLayout(layout)
     } catch (e: any) {
       setIssues([String(e?.message || e)])
     } finally {
@@ -49,6 +60,21 @@ export function App() {
     if (!pages) return
     if (kind === 'pdf') await exportToPdf(pages, options)
     else await exportToPngs(pages, options)
+  }
+
+  function openPicker(pageNumber: number, cardNumber: number, cardName?: string) {
+    console.log('open picker', pageNumber, cardNumber, cardName)
+    setPickerTarget({ pageNumber, cardNumber })
+    setPickerCardName(cardName ?? null)
+    setPickerOpen(true)
+  }
+
+  function applySelectedArt(url: string) {
+
+    if (!pickerTarget) return
+    const { pageNumber, cardNumber } = pickerTarget
+  pageService.replaceFront(pageNumber, cardNumber, ensureCorsSafe(url))
+    setPages(pageService.toLayoutPages())
   }
 
   return (
@@ -84,7 +110,16 @@ export function App() {
           </div>
         )}
       </div>
-      <Preview pages={pages} />
+      <Preview pages={pages} onCardClick={(p, i, name) => openPicker(p, i, name)} />
+      <CardArtSelector
+        open={pickerOpen}
+        name={pickerCardName}
+        onClose={() => setPickerOpen(false)}
+        onSave={(art) => {
+          applySelectedArt(art.url)
+          setPickerOpen(false)
+        }}
+      />
     </div>
   )
 }

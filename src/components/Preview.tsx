@@ -1,21 +1,38 @@
 import type { LayoutPages } from '@/lib/types'
+import { ensureCorsSafe } from '@/lib/image'
+import { CardFront } from '@/components/CardFront'
 
 type Props = {
   pages: LayoutPages | null
+  onCardClick?: (pageNumber: number, cardNumber: number, cardName?: string) => void
 }
 
-export function Preview({ pages }: Props) {
+export function Preview({ pages, onCardClick }: Props) {
+  const devProxyUrl = (url: string) => ensureCorsSafe(url)
   if (!pages) {
-  return <div className="text-gray-500">No pages yet. Generate to preview.</div>
+    return <div className="text-gray-500">No pages yet. Generate to preview.</div>
   }
   return (
   <div className="grid grid-cols-2 gap-3">
       {pages.map((p) => (
     <div key={p.id} className="border border-gray-300 p-2 rounded">
       <div className="mb-1.5 font-semibold">{p.role.toUpperCase()} — {p.id}</div>
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-3">
             {p.images.map((img, i) => (
-        <img key={i} src={img.url} className="w-full bg-gray-50" />
+        p.role === 'front' ? (
+          <CardFront
+            key={i}
+            image={img}
+            index={i + 1}
+            onClick={() => {
+              const pageNumber = Number(p.id.split('-')[1] || 1)
+              console.log('click', { pageNumber, cardNumber: i + 1, cardName: img.name })
+              onCardClick?.(pageNumber, i + 1, img.name)
+            }}
+          />
+        ) : (
+          <img key={i} src={devProxyUrl(img.url)} className="w-full bg-gray-50" />
+        )
             ))}
           </div>
         </div>

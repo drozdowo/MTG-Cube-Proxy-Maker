@@ -1,4 +1,5 @@
 import type { CardImage, LayoutPages } from '@/lib/types'
+import { ensureCorsSafe } from '@/lib/image'
 
 type Options = {
   dpi: number
@@ -20,18 +21,18 @@ export async function buildLayout(images: CardImage[], opts: Options): Promise<L
     const front = {
       id: `front-${i / perPage + 1}`,
       role: 'front' as const,
-      images: slice.map((c) => ({ url: c.frontUrl, x: 0, y: 0, w: 0, h: 0 })),
+      images: slice.map((c) => ({ url: c.frontUrl, x: 0, y: 0, w: 0, h: 0, name: c.name })),
     }
     // Back sheet: reverse each row (3 columns) but keep row order to align with duplex printing
     const cols = 3
     const rows = Math.ceil(slice.length / cols)
-    const backImages: { url: string; x: number; y: number; w: number; h: number }[] = []
-    for (let r = 0; r < rows; r++) {
+  const backImages: { url: string; x: number; y: number; w: number; h: number; name?: string }[] = []
+  for (let r = 0; r < rows; r++) {
       const start = r * cols
       const row = slice.slice(start, start + cols)
       const reversedRow = row.slice().reverse()
       for (const c of reversedRow) {
-        backImages.push({ url: c.backUrl || opts.defaultBack || c.frontUrl, x: 0, y: 0, w: 0, h: 0 })
+  backImages.push({ url: ensureCorsSafe(c.backUrl || opts.defaultBack || c.frontUrl), x: 0, y: 0, w: 0, h: 0, name: c.name })
       }
     }
     const back = {
