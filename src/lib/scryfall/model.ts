@@ -5,4 +5,5 @@ export type ScryfallCard = {
   set: string // Scryfall set code (e.g., "lea")
   frontImage: string
   backImage?: string | null
+  card_faces?: Array<{ image_uris: { png: string; large: string; normal: string } }>
 }

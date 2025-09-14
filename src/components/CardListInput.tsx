@@ -18,15 +18,12 @@ export function CardListInput({ value, onChange: onChangeProp }: Props) {
   }, [])
 
   const [items, setItems] = useState<Item[]>(initialItems)
-  const nextId = useRef(1)
-  if (nextId.current === 1 && items.length > 0) {
-    // seed nextId to avoid collisions if initialItems > 1
-    nextId.current = Math.max(...items.map(i => i.id)) + 1
-  }
+  // Monotonic id generator seeded from initial items to avoid collisions.
+  const nextId = useRef(initialItems.length > 0 ? Math.max(...initialItems.map(i => i.id)) + 1 : 1)
 
   // Map of input elements by item id for focus management
   const inputRefs = useRef(new Map<number, HTMLInputElement>())
-  const pendingFocusId = useRef<number | null>(0) // focus first input initially
+  const pendingFocusId = useRef<number | null>(null)
 
   // Focus the requested input after list updates
   useEffect(() => {
@@ -42,6 +39,14 @@ export function CardListInput({ value, onChange: onChangeProp }: Props) {
     else inputRefs.current.delete(id)
   }
 
+  // Convenience helpers
+  const lastItem = () => items[items.length - 1]
+  const focusOrQueue = (id: number) => {
+    const el = inputRefs.current.get(id)
+    if (el) el.focus()
+    else pendingFocusId.current = id
+  }
+
   const emit = (list: Item[]) => {
     onChangeProp?.(list.map(i => i.value).join('\n'))
   }
@@ -52,19 +57,18 @@ export function CardListInput({ value, onChange: onChangeProp }: Props) {
     emit(next)
   }
 
-  const addBelowOrFocusBottom = (afterId: number) => {
-    if (items[items.length - 1].value === '') {
-      const lastId = items[items.length - 1].id
-      const el = inputRefs.current.get(lastId)
-      if (el) el.focus()
-      else pendingFocusId.current = lastId
+  // If the bottom row is empty, focus it; otherwise append a new empty row and focus it.
+  const addBelowOrFocusBottom = (_afterId: number) => {
+    const last = lastItem()
+    if (last && last.value === '') {
+      focusOrQueue(last.id)
       return
     }
     const newId = nextId.current++
     const next = [...items, { id: newId, value: '' }]
     setItems(next)
     emit(next)
-    pendingFocusId.current = newId
+    focusOrQueue(newId)
   }
 
   const removeAndFocusPrev = (id: number) => {
@@ -78,7 +82,7 @@ export function CardListInput({ value, onChange: onChangeProp }: Props) {
     const next = items.filter(it => it.id !== id)
     setItems(next)
     emit(next)
-    pendingFocusId.current = prevId
+  focusOrQueue(prevId)
   }
 
   // Wire existing CardEntry key behaviors to our list ops

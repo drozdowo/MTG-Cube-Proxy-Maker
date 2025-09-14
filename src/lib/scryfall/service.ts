@@ -7,6 +7,80 @@ const CONCURRENCY = 3
 
 type FetchOpts = { attempts?: number; timeoutMs?: number; method?: string; body?: any }
 
+// --- Name normalization & fuzzy helpers ---
+function normalizeName(s: string): string {
+  try {
+    // Lowercase, strip diacritics, remove non-alphanumerics except space, collapse spaces
+    const ascii = s
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    return ascii
+  } catch {
+    // Fallback without unicode classes for older runtimes
+    return s
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+}
+
+function nameTokens(name: string): string[] {
+  return normalizeName(name)
+    .split(' ')
+    .filter(Boolean)
+}
+
+async function addAliasesToCache(card: ScryfallCard): Promise<void> {
+  const tokens = nameTokens(card.name)
+  const aliases = new Set<string>([normalizeName(card.name), ...tokens])
+  for (const token of aliases) {
+    const key = `scryfall:alias:${token}`
+    const existing = (await cache.get<string[]>(key)) || []
+    if (!existing.includes(card.name)) {
+      existing.push(card.name)
+      await cache.set(key, existing)
+    }
+  }
+}
+
+async function resolveFromAliases(inputName: string): Promise<ScryfallCard | undefined> {
+  const tokens = nameTokens(inputName)
+  if (!tokens.length) return undefined
+  // Try longer tokens first for better specificity
+  const sorted = [...tokens].sort((a, b) => b.length - a.length)
+  const candidates = new Map<string, number>() // name -> score
+  for (const t of sorted) {
+    const aliasList = (await cache.get<string[]>(`scryfall:alias:${t}`)) || []
+    for (const cand of aliasList) {
+      // score: how many query tokens are present in candidate tokens
+      const candTokens = new Set(nameTokens(cand))
+      let score = 0
+      for (const q of tokens) if (candTokens.has(q)) score++
+      const prev = candidates.get(cand) || 0
+      candidates.set(cand, Math.max(prev, score))
+    }
+    if (candidates.size) break // sufficient specificity from the longest matching token
+  }
+  if (!candidates.size) {
+    // try full normalized string
+    const norm = normalizeName(inputName)
+    const aliasList = (await cache.get<string[]>(`scryfall:alias:${norm}`)) || []
+    for (const cand of aliasList) candidates.set(cand, tokens.length)
+  }
+  if (!candidates.size) return undefined
+  // Pick best by score desc, then by shorter name length
+  const bestName = [...candidates.entries()]
+    .sort((a, b) => (b[1] - a[1]) || (a[0].length - b[0].length))
+    .map(([n]) => n)[0]
+  const card = await cache.get<ScryfallCard>(`scryfall:${bestName}`)
+  return card || undefined
+}
+
 async function fetchWithRetry(url: string, opts?: FetchOpts): Promise<Response | null> {
   const attempts = opts?.attempts ?? 3
   const timeoutMs = opts?.timeoutMs ?? 10000
@@ -106,9 +180,17 @@ export async function scryfallService(items: ParsedItem[]): Promise<CardImage[]>
     const cached = await cache.get<ScryfallCard>(`scryfall:${name}`)
     if (cached) {
       resolved.set(name, cached)
-    } else {
-      toFetch.push(name)
+      // ensure aliases are populated for future fuzzy lookups
+      await addAliasesToCache(cached)
+      continue
     }
+    // Try fuzzy via alias index
+    const fuzzy = await resolveFromAliases(name)
+    if (fuzzy) {
+      resolved.set(name, fuzzy)
+      continue
+    }
+    toFetch.push(name)
   }
 
   if (toFetch.length) {
@@ -116,6 +198,7 @@ export async function scryfallService(items: ParsedItem[]): Promise<CardImage[]>
     for (const [name, card] of fetched.entries()) {
       resolved.set(name, card)
       await cache.set(`scryfall:${name}`, card)
+      await addAliasesToCache(card)
     }
   }
 
@@ -123,15 +206,38 @@ export async function scryfallService(items: ParsedItem[]): Promise<CardImage[]>
   const results: CardImage[] = []
   for (const it of items) {
     const idBase = `${results.length}`
-    const card = resolved.get(it.name)
-    if (card) {
+    let card = resolved.get(it.name)
+    if (!card) {
+      // As a last resort, attempt fuzzy lookup against whatever was resolved
+      const itNorm = normalizeName(it.name)
+      const keys = [...resolved.keys()]
+      const bestKey = keys
+        .map(k => ({ k, norm: normalizeName(k) }))
+        .filter(x => x.norm.includes(itNorm) || itNorm.includes(x.norm))
+        .sort((a, b) => a.norm.length - b.norm.length)[0]?.k
+      if (bestKey) card = resolved.get(bestKey)
+      if (!card) {
+        // Try alias cache
+        card = await resolveFromAliases(it.name)
+      }
+    }
+    if (card && card.card_faces) {
+      console.log('card with faces?', card)
+      // if we have card_faces, 0 index is front, 1 is back.
+      results.push({
+        id: `${card.set}-${idBase}-a`,
+        name: card.name,
+        frontUrl: card.card_faces[0].image_uris.png,
+        backUrl: card.card_faces[1].image_uris.png ?? null,
+      })
+    } else if (card && !card.card_faces) {
       results.push({
         id: `${card.set}-${idBase}`,
         name: card.name,
         frontUrl: card.frontImage,
         backUrl: card.backImage ?? null,
       })
-    } 
+    }
   }
-  return results
+    return results
 }

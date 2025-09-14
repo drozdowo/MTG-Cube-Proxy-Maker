@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CardListInput } from '@/components/CardListInput'
-import { BackPicker } from '@/components/BackPicker'
+import { BackPicker } from '@/components/CardBack/BackPicker'
 import { OptionsPanel } from '@/components/Options'
 import { Preview } from '@/components/Preview'
 import { parseInput } from '@/lib/parse'
@@ -9,10 +9,11 @@ import { buildLayout } from '@/lib/layout'
 import { exportToPdf, exportToPngs } from '@/lib/export'
 import type { LayoutPages } from '@/lib/types'
 import type { ExportOptions } from '@/lib/types'
+import cardback from '../components/CardBack/cardback.jpg' // Ensure webpack includes default back image
 
 export function App() {
   const [raw, setRaw] = useState('Lightning Bolt\nCounterspell\nToken: Saproling')
-  const [defaultBack, setDefaultBack] = useState<string | null>(null)
+  const [defaultBack, setDefaultBack] = useState<string | null>(cardback)
   const [options, setOptions] = useState<ExportOptions>({
     dpi: 600,
     paper: 'A4',
@@ -33,6 +34,7 @@ export function App() {
     setBusy(true)
     setIssues([])
     try {
+      console.log(parsed.items)
       const imgs = await scryfallFetch(parsed.items)
       const layout = await buildLayout(imgs, { ...options, defaultBack })
       setPages(layout)

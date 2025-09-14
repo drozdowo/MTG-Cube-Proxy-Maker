@@ -8,7 +8,7 @@ export function BackPicker({ value, onChange }: Props) {
     if (!file) return onChange(null)
     const reader = new FileReader()
     reader.onload = () => onChange(reader.result as string)
-    reader.readAsDataURL(file)
+    reader.readAsDataURL(file);
   }
 
   return (

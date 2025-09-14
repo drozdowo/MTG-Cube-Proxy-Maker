@@ -9,7 +9,7 @@ export function Preview({ pages }: Props) {
   return <div className="text-gray-500">No pages yet. Generate to preview.</div>
   }
   return (
-  <div className="grid gap-3">
+  <div className="grid grid-cols-2 gap-3">
       {pages.map((p) => (
     <div key={p.id} className="border border-gray-300 p-2 rounded">
       <div className="mb-1.5 font-semibold">{p.role.toUpperCase()} — {p.id}</div>
