@@ -7,7 +7,7 @@ import { CardArtSelector } from '@/components/CardArtSelector'
 import { parseInput } from '@/lib/parse'
 import { scryfallFetch } from '@/lib/scryfall'
 import { buildLayout } from '@/lib/layout'
-import { exportToPdf, exportToPngs } from '@/lib/export'
+import { exportToPdf, exportToPngs, printPages } from '@/lib/export'
 import { pageService } from '@/lib/pageService'
 import type { LayoutPages } from '@/lib/types'
 import type { ExportOptions } from '@/lib/types'
@@ -149,6 +149,13 @@ export function App() {
             disabled={!pages || busy}
           >
             Export
+          </button>
+          <button
+            className="w-full px-3 py-1.5 rounded bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700"
+            onClick={async () => { if (pages) { await printPages(pages, options) } }}
+            disabled={!pages || busy}
+          >
+            Print
           </button>
         </div>
         {issues.length > 0 && (

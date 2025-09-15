@@ -33,6 +33,90 @@ export async function exportToPngs(pages: LayoutPages, options: ExportOptions): 
   return blobs
 }
 
+// Generate PNG blobs for pages without triggering downloads
+export async function generatePngBlobs(pages: LayoutPages, options: ExportOptions): Promise<Blob[]> {
+  const records = pageService.getAll()
+  const useService = records.length === pages.length && records.length > 0
+  const list: Array<LayoutPage> = []
+  if (useService) {
+    const rebuild: LayoutPages = pageService.toLayoutPages()
+    rebuild.forEach((p) => list.push(p))
+  } else {
+    pages.forEach((p) => list.push(p))
+  }
+
+  const blobs: Blob[] = []
+  for (const page of list) {
+    const blob = await renderPageToPng(page, options)
+    blobs.push(blob)
+  }
+  return blobs
+}
+
+// Open a print dialog for the given pages by rendering them to PNGs and embedding in a print window
+export async function printPages(pages: LayoutPages, options: ExportOptions): Promise<void> {
+  const blobs = await generatePngBlobs(pages, options)
+  const urls = blobs.map((b) => URL.createObjectURL(b))
+  const win = window.open('', '_blank')
+  if (!win) {
+    // Cleanup if popup was blocked
+    urls.forEach((u) => URL.revokeObjectURL(u))
+    throw new Error('Popup blocked: allow popups to print')
+  }
+
+  // Build minimal print-friendly HTML
+  const paper = options.paper === 'A4' ? 'A4' : 'Letter'
+  const orientation = options.orientation === 'landscape' ? 'landscape' : 'portrait'
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Print — MTGPM</title>
+    <style>
+      @page { size: ${paper} ${orientation}; margin: 0; }
+      html, body { margin: 0; padding: 0; background: white; }
+      img.page { display: block; width: 100%; height: auto; page-break-after: always; }
+      img.page:last-child { page-break-after: auto; }
+    </style>
+  </head>
+  <body>
+    ${urls.map((u) => `<img class="page" src="${u}" />`).join('\n')}
+    <script>
+      (function(){
+        function whenImagesReady(cb){
+          var imgs = Array.prototype.slice.call(document.images);
+          if(imgs.length === 0){ cb(); return; }
+          var left = imgs.length;
+          imgs.forEach(function(img){
+            if(img.complete) { if(--left === 0) cb(); }
+            else img.addEventListener('load', function(){ if(--left === 0) cb(); });
+          });
+        }
+        whenImagesReady(function(){
+          setTimeout(function(){
+            window.focus();
+            window.print();
+          }, 50);
+        });
+      })();
+    </script>
+  </body>
+</html>`
+
+  win.document.open()
+  win.document.write(html)
+  win.document.close()
+
+  // Cleanup object URLs after printing and close the window
+  const cleanup = () => {
+    try { urls.forEach((u) => URL.revokeObjectURL(u)) } catch {}
+    try { win.close() } catch {}
+  }
+  // Some browsers fire afterprint on the printing window, others on opener — attach both
+  try { win.addEventListener('afterprint', cleanup) } catch {}
+  try { window.addEventListener('afterprint', cleanup, { once: true }) } catch {}
+}
+
 // --- Rendering implementation ---
 const MM_PER_INCH = 25.4
 const A4_IN = { w: 210 / MM_PER_INCH, h: 297 / MM_PER_INCH } // 8.27 × 11.69 in
