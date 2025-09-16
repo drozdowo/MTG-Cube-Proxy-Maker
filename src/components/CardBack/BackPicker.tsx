@@ -34,7 +34,9 @@ export function BackPicker({ value, onChange }: Props) {
       </label>
       {value && (
         <div className="mt-2 flex justify-center">
-          <img src={value} alt="Default back" className="max-w-40 border border-gray-300 rounded" />
+          <div className="w-40 aspect-[63/88] relative border border-gray-300 rounded bg-gray-50 overflow-hidden">
+            <img src={value} alt="Back preview" className="absolute inset-0 w-full h-full object-cover" />
+          </div>
         </div>
       )}
     </div>

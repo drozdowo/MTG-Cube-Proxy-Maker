@@ -15,4 +15,6 @@ export type ExportOptions = {
   orientation: 'portrait' | 'landscape'
   alignmentOffsetX: number
   alignmentOffsetY: number
+  /** Optional print scale compensation factor. 1 = no change. Use ~1.01–1.03 to counter printer auto-shrink. */
+  printScaleCompensation?: number
 }

@@ -20,13 +20,14 @@ export function App() {
   const [raw, setRaw] = useState(``)
   const [defaultBack, setDefaultBack] = useState<string | null>(cardback)
   const [options, setOptions] = useState<ExportOptions>({
-    dpi: 600,
-    paper: 'A4',
-    bleed: 0,
+    dpi: 360,
+    paper: 'Letter',
+    bleed: 1,
     margin: 10,
     orientation: 'portrait',
     alignmentOffsetX: 0,
     alignmentOffsetY: 0,
+    printScaleCompensation: 1,
   })
 
   const parsed = useMemo(() => parseInput(raw), [raw])

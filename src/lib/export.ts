@@ -55,18 +55,66 @@ export async function generatePngBlobs(pages: LayoutPages, options: ExportOption
 
 // Open a print dialog for the given pages by rendering them to PNGs and embedding in a print window
 export async function printPages(pages: LayoutPages, options: ExportOptions): Promise<void> {
-  const blobs = await generatePngBlobs(pages, options)
-  const urls = blobs.map((b) => URL.createObjectURL(b))
+  // Open a print window
   const win = window.open('', '_blank')
-  if (!win) {
-    // Cleanup if popup was blocked
-    urls.forEach((u) => URL.revokeObjectURL(u))
-    throw new Error('Popup blocked: allow popups to print')
-  }
+  if (!win) throw new Error('Popup blocked: allow popups to print')
 
-  // Build minimal print-friendly HTML
+  // Paper and orientation
   const paper = options.paper === 'A4' ? 'A4' : 'Letter'
   const orientation = options.orientation === 'landscape' ? 'landscape' : 'portrait'
+
+  // Physical page size in inches and mm
+  const base = paperSizeInches(options.paper)
+  const pageWIn = options.orientation === 'portrait' ? base.w : base.h
+  const pageHIn = options.orientation === 'portrait' ? base.h : base.w
+  const pageWMm = pageWIn * MM_PER_INCH
+  const pageHMm = pageHIn * MM_PER_INCH
+
+  // Card physical size in mm including bleed
+  const cardWMm = CARD_MM.w + 2 * Math.max(0, options.bleed)
+  const cardHMm = CARD_MM.h + 2 * Math.max(0, options.bleed)
+
+  // Requested margins (mm), clamped so grid fits exactly (consider scale)
+  const totalGridWMm = COLS * cardWMm
+  const totalGridHMm = ROWS * cardHMm
+  // We'll apply CSS scale to the whole grid, so ensure the scaled grid still fits the page
+  const scale = Math.max(0.95, Math.min(1.1, options.printScaleCompensation || 1))
+  const maxMarginXMm = Math.max(0, (pageWMm - totalGridWMm * scale) / 2)
+  const maxMarginYMm = Math.max(0, (pageHMm - totalGridHMm * scale) / 2)
+  const requestedMarginMm = Math.max(0, options.margin)
+  const marginXMm = Math.min(requestedMarginMm, maxMarginXMm)
+  const marginYMm = Math.min(requestedMarginMm, maxMarginYMm)
+
+  // Alignment offsets (mm)
+  const offsetXMm = options.alignmentOffsetX || 0
+  const offsetYMm = options.alignmentOffsetY || 0
+
+  // 'scale' already computed above for margin clamping
+
+  // Build print HTML using exact physical sizes in inches/mm; avoid full-page image scaling
+  const pagesHtml = pages
+    .map((page) => {
+      const cells = page.images.slice(0, COLS * ROWS)
+      const items = cells
+        .map((img, i) => {
+          const col = i % COLS
+          const row = Math.floor(i / COLS)
+          const xMm = marginXMm + col * cardWMm
+          const yMm = marginYMm + row * cardHMm
+          const safeUrl = ensureCorsSafe(img.url)
+          return `<div class="cell" style="left:${xMm}mm; top:${yMm}mm; width:${cardWMm}mm; height:${cardHMm}mm;">
+              <img src="${safeUrl}" alt="card" />
+            </div>`
+        })
+        .join('')
+      return `<div class="page">
+        <div class="grid" style="transform: translate(${offsetXMm}mm, ${offsetYMm}mm) scale(${scale}); transform-origin: top left; width:${totalGridWMm}mm; height:${totalGridHMm}mm;">
+          ${items}
+        </div>
+      </div>`
+    })
+    .join('\n')
+
   const html = `<!doctype html>
 <html>
   <head>
@@ -74,13 +122,43 @@ export async function printPages(pages: LayoutPages, options: ExportOptions): Pr
     <title>Print — MTGPM</title>
     <style>
       @page { size: ${paper} ${orientation}; margin: 0; }
-      html, body { margin: 0; padding: 0; background: white; }
-      img.page { display: block; width: 100%; height: auto; page-break-after: always; }
-      img.page:last-child { page-break-after: auto; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: white;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .page {
+        position: relative;
+        width: ${pageWIn}in;
+        height: ${pageHIn}in;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden;
+      }
+      .page:last-child { page-break-after: auto; break-after: auto; }
+      .grid {
+        position: absolute;
+        left: 0; top: 0;
+        /* Sized exactly to the grid area in mm; translated by alignment offsets */
+      }
+      .cell {
+        position: absolute;
+        overflow: hidden;
+        background: #fff;
+      }
+      .cell img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* cover to respect bleed crop */
+        display: block;
+        margin: 0; border: 0; padding: 0;
+      }
     </style>
   </head>
   <body>
-    ${urls.map((u) => `<img class="page" src="${u}" />`).join('\n')}
+    ${pagesHtml}
     <script>
       (function(){
         function whenImagesReady(cb){
@@ -93,10 +171,7 @@ export async function printPages(pages: LayoutPages, options: ExportOptions): Pr
           });
         }
         whenImagesReady(function(){
-          setTimeout(function(){
-            window.focus();
-            window.print();
-          }, 50);
+          setTimeout(function(){ window.focus(); window.print(); }, 50);
         });
       })();
     </script>
@@ -105,16 +180,6 @@ export async function printPages(pages: LayoutPages, options: ExportOptions): Pr
 
   win.document.open()
   win.document.write(html)
-  win.document.close()
-
-  // Cleanup object URLs after printing and close the window
-  const cleanup = () => {
-    try { urls.forEach((u) => URL.revokeObjectURL(u)) } catch {}
-    try { win.close() } catch {}
-  }
-  // Some browsers fire afterprint on the printing window, others on opener — attach both
-  try { win.addEventListener('afterprint', cleanup) } catch {}
-  try { window.addEventListener('afterprint', cleanup, { once: true }) } catch {}
 }
 
 // --- Rendering implementation ---
@@ -124,7 +189,8 @@ const LETTER_IN = { w: 8.5, h: 11 } // 8.5 × 11 in
 
 const COLS = 3
 const ROWS = 3
-// MTG card trimmed size is ~63 × 88 mm. Bleed and margin values in options are treated as millimeters.
+// MTG card trimmed size is exactly 2.5 × 3.5 inches (63 × 88 mm).
+// Use exact metric values to avoid cumulative rounding causing prints to be slightly undersized.
 const CARD_MM = { w: 63, h: 88 }
 
 function paperSizeInches(paper: ExportOptions['paper']): { w: number; h: number } {
@@ -198,7 +264,8 @@ async function loadImage(inputUrl: string): Promise<HTMLImageElement> {
 
 async function renderPageToPng(page: LayoutPage, opts: ExportOptions): Promise<Blob> {
   const { w: pageW, h: pageH } = pagePixelSize(opts)
-  const marginPx = Math.round(mmToPx(opts.margin, opts.dpi))
+  // Requested margins in px (will be clamped to fit content below)
+  const requestedMarginPx = Math.max(0, Math.round(mmToPx(opts.margin, opts.dpi)))
   const bleedPx = Math.max(0, mmToPx(opts.bleed, opts.dpi))
   const offsetX = Math.round(mmToPx(opts.alignmentOffsetX, opts.dpi))
   const offsetY = Math.round(mmToPx(opts.alignmentOffsetY, opts.dpi))
@@ -207,9 +274,18 @@ async function renderPageToPng(page: LayoutPage, opts: ExportOptions): Promise<B
   const cardW = Math.round(mmToPx(CARD_MM.w, opts.dpi) + 2 * bleedPx)
   const cardH = Math.round(mmToPx(CARD_MM.h, opts.dpi) + 2 * bleedPx)
 
-  // Compute the drawable grid origin
-  const originX = marginPx + offsetX
-  const originY = marginPx + offsetY
+  // Compute effective margins so the 3×3 grid fits exactly inside the page.
+  // If the requested margin is too large for the selected paper size, we clamp it symmetrically.
+  const totalGridW = COLS * cardW
+  const totalGridH = ROWS * cardH
+  const maxMarginX = Math.max(0, Math.floor((pageW - totalGridW) / 2))
+  const maxMarginY = Math.max(0, Math.floor((pageH - totalGridH) / 2))
+  const marginX = Math.min(requestedMarginPx, maxMarginX)
+  const marginY = Math.min(requestedMarginPx, maxMarginY)
+
+  // Compute the drawable grid origin (after clamping) plus user alignment offsets
+  const originX = marginX + offsetX
+  const originY = marginY + offsetY
 
   // Canvas
   const canvas = document.createElement('canvas')

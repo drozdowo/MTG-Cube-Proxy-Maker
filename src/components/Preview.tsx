@@ -1,6 +1,7 @@
 import type { LayoutPages } from '@/lib/types'
 import { ensureCorsSafe } from '@/lib/image'
 import { CardFront } from '@/components/CardFront'
+import { CardBack } from '@/components/CardBack'
 
 type Props = {
   pages: LayoutPages | null
@@ -31,7 +32,7 @@ export function Preview({ pages, onCardClick }: Props) {
             }}
           />
         ) : (
-          <img key={i} src={devProxyUrl(img.url)} className="w-full bg-gray-50" />
+          <CardBack key={i} image={img} index={i + 1} />
         )
             ))}
           </div>
