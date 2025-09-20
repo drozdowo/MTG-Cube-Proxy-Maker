@@ -121,8 +121,15 @@ function computeLayoutMetrics(opts: ExportOptions) {
   const maxMarginXMm = Math.max(0, (pageWMm - totalGridWMm * scale) / 2)
   const maxMarginYMm = Math.max(0, (pageHMm - totalGridHMm * scale) / 2)
   const requestedMarginMm = Math.max(0, opts.margin)
-  const marginXMm = Math.min(requestedMarginMm, maxMarginXMm)
-  const marginYMm = Math.min(requestedMarginMm, maxMarginYMm)
+  // Base margin is the user-requested margin capped so the grid still fits.
+  const baseMarginXMm = Math.min(requestedMarginMm, maxMarginXMm)
+  const baseMarginYMm = Math.min(requestedMarginMm, maxMarginYMm)
+  // Any remaining space (after accounting for the explicit margins on both sides) should be split
+  // equally so the grid is visually centered instead of hugging the top/left.
+  const leftoverXMm = pageWMm - totalGridWMm * scale - 2 * baseMarginXMm
+  const leftoverYMm = pageHMm - totalGridHMm * scale - 2 * baseMarginYMm
+  const marginXMm = baseMarginXMm + (leftoverXMm > 0 ? leftoverXMm / 2 : 0)
+  const marginYMm = baseMarginYMm + (leftoverYMm > 0 ? leftoverYMm / 2 : 0)
   const offsetXMm = opts.alignmentOffsetX || 0
   const offsetYMm = opts.alignmentOffsetY || 0
   return {
@@ -137,7 +144,7 @@ function computeLayoutMetrics(opts: ExportOptions) {
     totalGridWMm,
     totalGridHMm,
     scale,
-    marginXMm,
+    marginXMm, // fully centered margin actually applied
     marginYMm,
     offsetXMm,
     offsetYMm,
