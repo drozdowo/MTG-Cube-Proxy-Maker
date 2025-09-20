@@ -55,43 +55,9 @@ export async function generatePngBlobs(pages: LayoutPages, options: ExportOption
 
 // Open a print dialog for the given pages by rendering them to PNGs and embedding in a print window
 export async function printPages(pages: LayoutPages, options: ExportOptions): Promise<void> {
-  // Open a print window
   const win = window.open('', '_blank')
   if (!win) throw new Error('Popup blocked: allow popups to print')
-
-  // Paper and orientation
-  const paper = options.paper === 'A4' ? 'A4' : 'Letter'
-  const orientation = options.orientation === 'landscape' ? 'landscape' : 'portrait'
-
-  // Physical page size in inches and mm
-  const base = paperSizeInches(options.paper)
-  const pageWIn = options.orientation === 'portrait' ? base.w : base.h
-  const pageHIn = options.orientation === 'portrait' ? base.h : base.w
-  const pageWMm = pageWIn * MM_PER_INCH
-  const pageHMm = pageHIn * MM_PER_INCH
-
-  // Card physical size in mm including bleed
-  const cardWMm = CARD_MM.w + 2 * Math.max(0, options.bleed)
-  const cardHMm = CARD_MM.h + 2 * Math.max(0, options.bleed)
-
-  // Requested margins (mm), clamped so grid fits exactly (consider scale)
-  const totalGridWMm = COLS * cardWMm
-  const totalGridHMm = ROWS * cardHMm
-  // We'll apply CSS scale to the whole grid, so ensure the scaled grid still fits the page
-  const scale = Math.max(0.95, Math.min(1.1, options.printScaleCompensation || 1))
-  const maxMarginXMm = Math.max(0, (pageWMm - totalGridWMm * scale) / 2)
-  const maxMarginYMm = Math.max(0, (pageHMm - totalGridHMm * scale) / 2)
-  const requestedMarginMm = Math.max(0, options.margin)
-  const marginXMm = Math.min(requestedMarginMm, maxMarginXMm)
-  const marginYMm = Math.min(requestedMarginMm, maxMarginYMm)
-
-  // Alignment offsets (mm)
-  const offsetXMm = options.alignmentOffsetX || 0
-  const offsetYMm = options.alignmentOffsetY || 0
-
-  // 'scale' already computed above for margin clamping
-
-  // Build print HTML using exact physical sizes in inches/mm; avoid full-page image scaling
+  const m = computeLayoutMetrics(options)
   const pagesHtml = pages
     .map((page) => {
       const cells = page.images.slice(0, COLS * ROWS)
@@ -99,85 +65,17 @@ export async function printPages(pages: LayoutPages, options: ExportOptions): Pr
         .map((img, i) => {
           const col = i % COLS
           const row = Math.floor(i / COLS)
-          const xMm = marginXMm + col * cardWMm
-          const yMm = marginYMm + row * cardHMm
+            const xMm = m.marginXMm + col * m.cardWMm
+            const yMm = m.marginYMm + row * m.cardHMm
           const safeUrl = ensureCorsSafe(img.url)
-          return `<div class="cell" style="left:${xMm}mm; top:${yMm}mm; width:${cardWMm}mm; height:${cardHMm}mm;">
-              <img src="${safeUrl}" alt="card" />
-            </div>`
+          return `<div class=\"cell\" style=\"left:${xMm}mm; top:${yMm}mm; width:${m.cardWMm}mm; height:${m.cardHMm}mm;\">\n              <img src=\"${safeUrl}\" alt=\"card\" />\n            </div>`
         })
         .join('')
-      return `<div class="page">
-        <div class="grid" style="transform: translate(${offsetXMm}mm, ${offsetYMm}mm) scale(${scale}); transform-origin: top left; width:${totalGridWMm}mm; height:${totalGridHMm}mm;">
-          ${items}
-        </div>
-      </div>`
+      return `<div class=\"page\">\n        <div class=\"grid\" style=\"transform: translate(${m.offsetXMm}mm, ${m.offsetYMm}mm) scale(${m.scale}); transform-origin: top left; width:${m.totalGridWMm}mm; height:${m.totalGridHMm}mm;\">\n          ${items}\n        </div>\n      </div>`
     })
     .join('\n')
 
-  const html = `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Print — MTGPM</title>
-    <style>
-      @page { size: ${paper} ${orientation}; margin: 0; }
-      html, body {
-        margin: 0;
-        padding: 0;
-        background: white;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .page {
-        position: relative;
-        width: ${pageWIn}in;
-        height: ${pageHIn}in;
-        page-break-after: always;
-        break-after: page;
-        overflow: hidden;
-      }
-      .page:last-child { page-break-after: auto; break-after: auto; }
-      .grid {
-        position: absolute;
-        left: 0; top: 0;
-        /* Sized exactly to the grid area in mm; translated by alignment offsets */
-      }
-      .cell {
-        position: absolute;
-        overflow: hidden;
-        background: #fff;
-      }
-      .cell img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover; /* cover to respect bleed crop */
-        display: block;
-        margin: 0; border: 0; padding: 0;
-      }
-    </style>
-  </head>
-  <body>
-    ${pagesHtml}
-    <script>
-      (function(){
-        function whenImagesReady(cb){
-          var imgs = Array.prototype.slice.call(document.images);
-          if(imgs.length === 0){ cb(); return; }
-          var left = imgs.length;
-          imgs.forEach(function(img){
-            if(img.complete) { if(--left === 0) cb(); }
-            else img.addEventListener('load', function(){ if(--left === 0) cb(); });
-          });
-        }
-        whenImagesReady(function(){
-          setTimeout(function(){ window.focus(); window.print(); }, 50);
-        });
-      })();
-    </script>
-  </body>
-</html>`
-
+  const html = `<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Print — MTGPM</title>\n    <style>\n      @page { size: ${m.paper} ${m.orientation}; margin: 0; }\n      html, body {\n        margin: 0;\n        padding: 0;\n        background: white;\n        -webkit-print-color-adjust: exact;\n        print-color-adjust: exact;\n      }\n      .page {\n        position: relative;\n        width: ${m.pageWIn}in;\n        height: ${m.pageHIn}in;\n        page-break-after: always;\n        break-after: page;\n        overflow: hidden;\n      }\n      .page:last-child { page-break-after: auto; break-after: auto; }\n      .grid {\n        position: absolute;\n        left: 0; top: 0;\n      }\n      .cell {\n        position: absolute;\n        overflow: hidden;\n        background: #fff;\n      }\n      .cell img {\n        width: 100%;\n        height: 100%;\n        object-fit: cover;\n        display: block;\n        margin: 0; border: 0; padding: 0;\n      }\n    </style>\n  </head>\n  <body>\n    ${pagesHtml}\n    <script>\n      (function(){\n        function whenImagesReady(cb){\n          var imgs = Array.prototype.slice.call(document.images);\n          if(imgs.length === 0){ cb(); return; }\n          var left = imgs.length;\n          imgs.forEach(function(img){\n            if(img.complete) { if(--left === 0) cb(); }\n            else img.addEventListener('load', function(){ if(--left === 0) cb(); });\n          });\n        }\n        whenImagesReady(function(){\n          setTimeout(function(){ window.focus(); window.print(); }, 50);\n        });\n      })();\n    </script>\n  </body>\n</html>`
   win.document.open()
   win.document.write(html)
 }
@@ -195,6 +93,55 @@ const CARD_MM = { w: 63, h: 88 }
 
 function paperSizeInches(paper: ExportOptions['paper']): { w: number; h: number } {
   return paper === 'A4' ? A4_IN : LETTER_IN
+}
+
+// Shared physical layout metrics so print + PNG export remain identical.
+function computeLayoutMetrics(opts: ExportOptions) {
+  const paper = opts.paper === 'A4' ? 'A4' : 'Letter'
+  const orientation = opts.orientation === 'landscape' ? 'landscape' : 'portrait'
+  const base = paperSizeInches(opts.paper)
+  const pageWIn = orientation === 'portrait' ? base.w : base.h
+  const pageHIn = orientation === 'portrait' ? base.h : base.w
+  const pageWMm = pageWIn * MM_PER_INCH
+  const pageHMm = pageHIn * MM_PER_INCH
+  const cardWMm = CARD_MM.w + 2 * Math.max(0, opts.bleed)
+  const cardHMm = CARD_MM.h + 2 * Math.max(0, opts.bleed)
+  const totalGridWMm = COLS * cardWMm
+  const totalGridHMm = ROWS * cardHMm
+  // Derive scale: explicit override takes precedence, else use printer preset heuristics.
+  // Epson ET-2400 (approx) unprintable margins at "Normal" ~3.4mm (0.134in) each edge; "Uniform" a bit larger (~4mm) but consistent.
+  // We slightly upscale the grid so that after the printer driver auto-reduces to fit, the physical card size remains closer to 63x88mm.
+  // Empirically: scaling up 1.8% (Normal) or 2.4% (Uniform) compensates typical shrink.
+  let autoScale = 1
+  if (!opts.printScaleCompensation && opts.printerPreset) {
+    if (opts.printerPreset === 'epson-normal') autoScale = 1.018
+    else if (opts.printerPreset === 'epson-uniform') autoScale = 1.024
+  }
+  const scale = Math.max(0.95, Math.min(1.1, opts.printScaleCompensation || autoScale))
+  const maxMarginXMm = Math.max(0, (pageWMm - totalGridWMm * scale) / 2)
+  const maxMarginYMm = Math.max(0, (pageHMm - totalGridHMm * scale) / 2)
+  const requestedMarginMm = Math.max(0, opts.margin)
+  const marginXMm = Math.min(requestedMarginMm, maxMarginXMm)
+  const marginYMm = Math.min(requestedMarginMm, maxMarginYMm)
+  const offsetXMm = opts.alignmentOffsetX || 0
+  const offsetYMm = opts.alignmentOffsetY || 0
+  return {
+    paper,
+    orientation,
+    pageWIn,
+    pageHIn,
+    pageWMm,
+    pageHMm,
+    cardWMm,
+    cardHMm,
+    totalGridWMm,
+    totalGridHMm,
+    scale,
+    marginXMm,
+    marginYMm,
+    offsetXMm,
+    offsetYMm,
+  }
 }
 
 function pagePixelSize(opts: ExportOptions): { w: number; h: number } {
@@ -263,29 +210,20 @@ async function loadImage(inputUrl: string): Promise<HTMLImageElement> {
 }
 
 async function renderPageToPng(page: LayoutPage, opts: ExportOptions): Promise<Blob> {
+  const metrics = computeLayoutMetrics(opts)
   const { w: pageW, h: pageH } = pagePixelSize(opts)
-  // Requested margins in px (will be clamped to fit content below)
-  const requestedMarginPx = Math.max(0, Math.round(mmToPx(opts.margin, opts.dpi)))
-  const bleedPx = Math.max(0, mmToPx(opts.bleed, opts.dpi))
-  const offsetX = Math.round(mmToPx(opts.alignmentOffsetX, opts.dpi))
-  const offsetY = Math.round(mmToPx(opts.alignmentOffsetY, opts.dpi))
-
-  // Card size in pixels including bleed on all sides
-  const cardW = Math.round(mmToPx(CARD_MM.w, opts.dpi) + 2 * bleedPx)
-  const cardH = Math.round(mmToPx(CARD_MM.h, opts.dpi) + 2 * bleedPx)
-
-  // Compute effective margins so the 3×3 grid fits exactly inside the page.
-  // If the requested margin is too large for the selected paper size, we clamp it symmetrically.
-  const totalGridW = COLS * cardW
-  const totalGridH = ROWS * cardH
-  const maxMarginX = Math.max(0, Math.floor((pageW - totalGridW) / 2))
-  const maxMarginY = Math.max(0, Math.floor((pageH - totalGridH) / 2))
-  const marginX = Math.min(requestedMarginPx, maxMarginX)
-  const marginY = Math.min(requestedMarginPx, maxMarginY)
-
-  // Compute the drawable grid origin (after clamping) plus user alignment offsets
-  const originX = marginX + offsetX
-  const originY = marginY + offsetY
+  // Convert mm metrics to px
+  const cardWBasePx = mmToPx(metrics.cardWMm, opts.dpi)
+  const cardHBasePx = mmToPx(metrics.cardHMm, opts.dpi)
+  const marginXBasePx = mmToPx(metrics.marginXMm, opts.dpi)
+  const marginYBasePx = mmToPx(metrics.marginYMm, opts.dpi)
+  const offsetXBasePx = mmToPx(metrics.offsetXMm, opts.dpi)
+  const offsetYBasePx = mmToPx(metrics.offsetYMm, opts.dpi)
+  const scale = metrics.scale
+  const cardW = Math.round(cardWBasePx * scale)
+  const cardH = Math.round(cardHBasePx * scale)
+  const originX = Math.round((marginXBasePx + offsetXBasePx) * scale)
+  const originY = Math.round((marginYBasePx + offsetYBasePx) * scale)
 
   // Canvas
   const canvas = document.createElement('canvas')
@@ -323,12 +261,12 @@ async function renderPageToPng(page: LayoutPage, opts: ExportOptions): Promise<B
     if (item.ok && item.el) {
       // Fit image to cardW×cardH while preserving aspect ratio (cover)
       const el = item.el
-      const scale = Math.max(cardW / el.naturalWidth, cardH / el.naturalHeight)
-      const dw = Math.round(el.naturalWidth * scale)
-      const dh = Math.round(el.naturalHeight * scale)
-      const dx = x + Math.round((cardW - dw) / 2)
-      const dy = y + Math.round((cardH - dh) / 2)
-      ctx.drawImage(el, dx, dy, dw, dh)
+  const coverScale = Math.max(cardW / el.naturalWidth, cardH / el.naturalHeight)
+  const dw = Math.round(el.naturalWidth * coverScale)
+  const dh = Math.round(el.naturalHeight * coverScale)
+  const dx = x + Math.round((cardW - dw) / 2)
+  const dy = y + Math.round((cardH - dh) / 2)
+  ctx.drawImage(el, dx, dy, dw, dh)
       // Optional: draw trim area
       // ctx.strokeStyle = 'rgba(0,0,0,0.06)'
       // ctx.strokeRect(x + bleedPx, y + bleedPx, cardW - 2 * bleedPx, cardH - 2 * bleedPx)

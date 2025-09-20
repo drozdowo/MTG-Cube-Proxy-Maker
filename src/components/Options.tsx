@@ -28,9 +28,43 @@ export function OptionsPanel({ value, onChange, onGenerate, busy }: Props) {
             <option value="A4">A4</option>
           </select>
         </Row>
+        <Row label="Printer Preset">
+          <select
+            className="border border-gray-300 rounded px-2 py-1 w-full"
+            value={value.printerPreset || 'none'}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => update('printerPreset', e.target.value as any)}
+          >
+            <option value="none">None / Custom</option>
+            <option value="epson-normal">Epson ET-2400 Normal</option>
+            <option value="epson-uniform">Epson ET-2400 Uniform</option>
+          </select>
+        </Row>
         <Row label="DPI">
     <input className="border border-gray-300 rounded px-2 py-1 w-full" type="number" value={value.dpi} onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('dpi', Number(e.target.value))} />
         </Row>
+        <Row label="Scale Override %">
+          <input
+            className="border border-gray-300 rounded px-2 py-1 w-full"
+            type="number"
+            min={95}
+            max={110}
+            step={0.1}
+            value={Math.round(((value.printScaleCompensation ?? 0) * 100 + Number.EPSILON) * 10) / 10 || ''}
+            placeholder={value.printerPreset === 'epson-normal' ? '≈101.8%' : value.printerPreset === 'epson-uniform' ? '≈102.4%' : '100%'}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const pct = Number(e.target.value)
+              if (!e.target.value) {
+                update('printScaleCompensation', undefined as any)
+                return
+              }
+              const factor = isFinite(pct) && pct > 0 ? pct / 100 : 1
+              update('printScaleCompensation', factor as any)
+            }}
+          />
+        </Row>
+        <div className="text-xs text-gray-500 -mt-1 mb-1">
+          Leave blank to auto scale based on preset. Override only if physical cards print undersized/oversized.
+        </div>
         {/* <Row label="Print scale comp. (%)">
           <input
             className="border border-gray-300 rounded px-2 py-1 w-full"

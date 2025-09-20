@@ -27,7 +27,8 @@ export function App() {
     orientation: 'portrait',
     alignmentOffsetX: 0,
     alignmentOffsetY: 0,
-    printScaleCompensation: 1,
+    printScaleCompensation: undefined,
+    printerPreset: 'epson-normal',
   })
 
   const parsed = useMemo(() => parseInput(raw), [raw])

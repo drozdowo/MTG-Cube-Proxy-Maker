@@ -152,6 +152,17 @@ yarn dev
 5) Print presets
 6) Token support and manual overrides
 
+### Printer Presets & Scaling
+Some consumer printers (e.g., Epson ET-2400 series) enforce unprintable hardware margins and will auto-scale content down when the page has zero CSS margin. This causes card images to print slightly undersized (e.g., 62.3 mm instead of 63 mm width).
+
+To counter this, a `printerPreset` option can be set:
+- `epson-normal`: Applies ~1.8% scale up (1.018)
+- `epson-uniform`: Applies ~2.4% scale up (1.024)
+
+You can also specify a manual `printScaleCompensation` (% override in Options panel). Leave the field blank to use the preset's automatic factor. The final applied scale is clamped between 0.95 and 1.10 to prevent extreme values.
+
+If after printing and measuring a physical proxy the card is still undersized/oversized, adjust the manual override in small 0.1% steps. Example: printed width = 62.6 mm, desired = 63.0 mm → needed factor ≈ 63 / 62.6 = 1.0064 (≈100.6%).
+
 ## Notes
 - UI library: choose a small, accessible set (e.g., Radix UI + Tailwind or Headless UI)
 - Keep everything client-side to avoid hosting complexity; consider Next.js only if SSR is needed later

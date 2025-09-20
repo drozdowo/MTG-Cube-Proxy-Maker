@@ -17,7 +17,7 @@ export function Preview({ pages, onCardClick }: Props) {
   <div className="grid grid-cols-2 gap-3">
       {pages.map((p) => (
     <div key={p.id} className="border border-gray-300 p-2 rounded">
-      <div className="mb-1.5 font-semibold">{p.role.toUpperCase()} — {p.id}</div>
+      <div className="mb-1.5 font-semibold">{p.id}</div>
       <div className="grid grid-cols-3">
             {p.images.map((img, i) => (
         p.role === 'front' ? (

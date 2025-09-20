@@ -17,4 +17,6 @@ export type ExportOptions = {
   alignmentOffsetY: number
   /** Optional print scale compensation factor. 1 = no change. Use ~1.01–1.03 to counter printer auto-shrink. */
   printScaleCompensation?: number
+  /** Printer hardware margin preset to auto-compensate shrink introduced by unprintable areas. */
+  printerPreset?: 'none' | 'epson-normal' | 'epson-uniform'
 }
