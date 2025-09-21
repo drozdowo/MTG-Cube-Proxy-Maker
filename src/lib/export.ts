@@ -65,17 +65,35 @@ export async function printPages(pages: LayoutPages, options: ExportOptions): Pr
         .map((img, i) => {
           const col = i % COLS
           const row = Math.floor(i / COLS)
-            const xMm = m.marginXMm + col * m.cardWMm
-            const yMm = m.marginYMm + row * m.cardHMm
+          const xMm = m.marginXMm + col * m.cardWMm
+          const yMm = m.marginYMm + row * m.cardHMm
           const safeUrl = ensureCorsSafe(img.url)
-          return `<div class=\"cell\" style=\"left:${xMm}mm; top:${yMm}mm; width:${m.cardWMm}mm; height:${m.cardHMm}mm;\">\n              <img src=\"${safeUrl}\" alt=\"card\" />\n            </div>`
+          const bleedMm = Math.max(0, options.bleed)
+          const trimmedWMm = m.cardWMm - bleedMm * 2
+          const trimmedHMm = m.cardHMm - bleedMm * 2
+          const bg = bleedMm > 0 ? '#000' : '#fff'
+          return `<div class=\"cell\" style=\"left:${xMm}mm; top:${yMm}mm; width:${m.cardWMm}mm; height:${m.cardHMm}mm; background:${bg};\">\n              <img src=\"${safeUrl}\" alt=\"card\" style=\"position:absolute; left:${bleedMm}mm; top:${bleedMm}mm; width:${trimmedWMm}mm; height:${trimmedHMm}mm; object-fit:cover;\" />\n            </div>`
         })
         .join('')
-      return `<div class=\"page\">\n        <div class=\"grid\" style=\"transform: translate(${m.offsetXMm}mm, ${m.offsetYMm}mm) scale(${m.scale}); transform-origin: top left; width:${m.totalGridWMm}mm; height:${m.totalGridHMm}mm;\">\n          ${items}\n        </div>\n      </div>`
+      let guides = ''
+      if (options.drawCutMargins) {
+        const verticals: string[] = []
+        const horizontals: string[] = []
+        for (let c = 1; c < COLS; c++) {
+          const x = c * m.cardWMm
+          verticals.push(`<div class=\"cut-guide cut-v\" style=\"left:${x}mm; top:-4%; bottom:-4%;\"></div>`)
+        }
+        for (let r = 1; r < ROWS; r++) {
+          const y = r * m.cardHMm
+          horizontals.push(`<div class=\"cut-guide cut-h\" style=\"top:${y}mm; left:-2%; right:-2%;\"></div>`)
+        }
+        guides = `<div class=\"cut-guides\">${verticals.join('')}${horizontals.join('')}</div>`
+      }
+      return `<div class=\"page\">\n        <div class=\"grid\" style=\"transform: translate(${m.offsetXMm}mm, ${m.offsetYMm}mm) scale(${m.scale}); transform-origin: top left; width:${m.totalGridWMm}mm; height:${m.totalGridHMm}mm;\">\n          ${items}\n          ${guides}\n        </div>\n      </div>`
     })
     .join('\n')
 
-  const html = `<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Print — MTGPM</title>\n    <style>\n      @page { size: ${m.paper} ${m.orientation}; margin: 0; }\n      html, body {\n        margin: 0;\n        padding: 0;\n        background: white;\n        -webkit-print-color-adjust: exact;\n        print-color-adjust: exact;\n      }\n      .page {\n        position: relative;\n        width: ${m.pageWIn}in;\n        height: ${m.pageHIn}in;\n        page-break-after: always;\n        break-after: page;\n        overflow: hidden;\n      }\n      .page:last-child { page-break-after: auto; break-after: auto; }\n      .grid {\n        position: absolute;\n        left: 0; top: 0;\n      }\n      .cell {\n        position: absolute;\n        overflow: hidden;\n        background: #fff;\n      }\n      .cell img {\n        width: 100%;\n        height: 100%;\n        object-fit: cover;\n        display: block;\n        margin: 0; border: 0; padding: 0;\n      }\n    </style>\n  </head>\n  <body>\n    ${pagesHtml}\n    <script>\n      (function(){\n        function whenImagesReady(cb){\n          var imgs = Array.prototype.slice.call(document.images);\n          if(imgs.length === 0){ cb(); return; }\n          var left = imgs.length;\n          imgs.forEach(function(img){\n            if(img.complete) { if(--left === 0) cb(); }\n            else img.addEventListener('load', function(){ if(--left === 0) cb(); });\n          });\n        }\n        whenImagesReady(function(){\n          setTimeout(function(){ window.focus(); window.print(); }, 50);\n        });\n      })();\n    </script>\n  </body>\n</html>`
+  const html = `<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Print — MTGPM</title>\n    <style>\n      @page { size: ${m.paper} ${m.orientation}; margin: 0; }\n      html, body {\n        margin: 0;\n        padding: 0;\n        background: white;\n        -webkit-print-color-adjust: exact;\n        print-color-adjust: exact;\n      }\n      .page {\n        position: relative;\n        width: ${m.pageWIn}in;\n        height: ${m.pageHIn}in;\n        page-break-after: always;\n        break-after: page;\n        overflow: hidden;\n      }\n      .page:last-child { page-break-after: auto; break-after: auto; }\n      .grid {\n        position: absolute;\n        left: 0; top: 0;\n      }\n      .cell {\n        position: absolute;\n        overflow: hidden;\n        background: #fff;\n      }\n      .cell img {\n        width: 100%;\n        height: 100%;\n        object-fit: cover;\n        display: block;\n        margin: 0; border: 0; padding: 0;\n      }\n      .cut-guides { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; }\n      .cut-guide { position:absolute; background: rgba(16,185,129,0.8); }\n      .cut-guide.cut-v { width:0.4mm; transform:translateX(-0.2mm); }\n      .cut-guide.cut-h { height:0.4mm; transform:translateY(-0.2mm); }\n    </style>\n  </head>\n  <body>\n    ${pagesHtml}\n    <script>\n      (function(){\n        function whenImagesReady(cb){\n          var imgs = Array.prototype.slice.call(document.images);\n          if(imgs.length === 0){ cb(); return; }\n          var left = imgs.length;\n          imgs.forEach(function(img){\n            if(img.complete) { if(--left === 0) cb(); }\n            else img.addEventListener('load', function(){ if(--left === 0) cb(); });\n          });\n        }\n        whenImagesReady(function(){\n          setTimeout(function(){ window.focus(); window.print(); }, 50);\n        });\n      })();\n    </script>\n  </body>\n</html>`
   win.document.open()
   win.document.write(html)
 }
@@ -263,23 +281,52 @@ async function renderPageToPng(page: LayoutPage, opts: ExportOptions): Promise<B
     const row = Math.floor(i / COLS)
     const x = originX + col * cardW
     const y = originY + row * cardH
-
     const item = loaded[i]
+    // Draw bleed background (full card area) if bleed > 0
+    const bleedMm = Math.max(0, opts.bleed)
+    if (bleedMm > 0) {
+      ctx.fillStyle = '#000'
+      ctx.fillRect(x, y, cardW, cardH)
+    }
     if (item.ok && item.el) {
-      // Fit image to cardW×cardH while preserving aspect ratio (cover)
       const el = item.el
-  const coverScale = Math.max(cardW / el.naturalWidth, cardH / el.naturalHeight)
-  const dw = Math.round(el.naturalWidth * coverScale)
-  const dh = Math.round(el.naturalHeight * coverScale)
-  const dx = x + Math.round((cardW - dw) / 2)
-  const dy = y + Math.round((cardH - dh) / 2)
-  ctx.drawImage(el, dx, dy, dw, dh)
-      // Optional: draw trim area
-      // ctx.strokeStyle = 'rgba(0,0,0,0.06)'
-      // ctx.strokeRect(x + bleedPx, y + bleedPx, cardW - 2 * bleedPx, cardH - 2 * bleedPx)
+      // Physical trimmed size area inside bleed: subtract bleed each side (already accounted in metrics.cardWMm)
+      // Compute inset in pixels: bleedMm * dpi / 25.4 * scale
+      const insetPx = Math.round(mmToPx(bleedMm, opts.dpi) * scale)
+      const innerW = cardW - insetPx * 2
+      const innerH = cardH - insetPx * 2
+      // Cover fit inside trimmed area
+      const coverScale = Math.max(innerW / el.naturalWidth, innerH / el.naturalHeight)
+      const dw = Math.round(el.naturalWidth * coverScale)
+      const dh = Math.round(el.naturalHeight * coverScale)
+      const dx = x + insetPx + Math.round((innerW - dw) / 2)
+      const dy = y + insetPx + Math.round((innerH - dh) / 2)
+      ctx.drawImage(el, dx, dy, dw, dh)
     } else {
-      // Placeholder for missing image
       drawPlaceholder(ctx, x, y, cardW, cardH)
+    }
+  }
+
+  // Overlay cut margin guides after drawing cards
+  if (opts.drawCutMargins) {
+    const totalW = cardW * COLS
+    const totalH = cardH * ROWS
+    const extraV = Math.round(totalH * 0.04)
+    const extraH = Math.round(totalW * 0.02)
+    const lineColor = 'rgba(16,185,129,0.8)'
+    // Vertical lines
+    for (let c = 1; c < COLS; c++) {
+      const x = originX + c * cardW
+      const w = Math.max(1, Math.round(cardW * 0.0025))
+      ctx.fillStyle = lineColor
+      ctx.fillRect(Math.round(x - w / 2), originY - extraV, w, totalH + 2 * extraV)
+    }
+    // Horizontal lines
+    for (let r = 1; r < ROWS; r++) {
+      const y = originY + r * cardH
+      const h = Math.max(1, Math.round(cardH * 0.0025))
+      ctx.fillStyle = lineColor
+      ctx.fillRect(originX - extraH, Math.round(y - h / 2), totalW + 2 * extraH, h)
     }
   }
 

@@ -6,9 +6,11 @@ type Props = {
   onChange: (v: ExportOptions) => void
   onGenerate: () => void
   busy?: boolean
+  onClearCustomImages?: () => void
+  customImagesCount?: number
 }
 
-export function OptionsPanel({ value, onChange, onGenerate, busy }: Props) {
+export function OptionsPanel({ value, onChange, onGenerate, busy, onClearCustomImages, customImagesCount }: Props) {
   function update<K extends keyof ExportOptions>(k: K, v: ExportOptions[K]) {
     onChange({ ...value, [k]: v })
   }
@@ -41,6 +43,33 @@ export function OptionsPanel({ value, onChange, onGenerate, busy }: Props) {
         </Row>
         <Row label="DPI">
     <input className="border border-gray-300 rounded px-2 py-1 w-full" type="number" value={value.dpi} onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('dpi', Number(e.target.value))} />
+        </Row>
+        <Row label="Bleed (mm)">
+          <input
+            className="border border-gray-300 rounded px-2 py-1 w-full"
+            type="number"
+            min={0}
+            max={5}
+            step={0.1}
+            value={value.bleed || (value.bleed === 0 ? 0 : 1)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const raw = e.target.value
+              if (raw === '') {
+                update('bleed', 0 as any)
+                return
+              }
+              const mm = Number(raw)
+              update('bleed', (isFinite(mm) && mm >= 0 ? mm : 0) as any)
+            }}
+          />
+        </Row>
+        <Row label="Draw Cut Margins">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={value.drawCutMargins}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('drawCutMargins', e.target.checked)}
+          />
         </Row>
         <Row label="Scale Override %">
           <input
@@ -80,8 +109,21 @@ export function OptionsPanel({ value, onChange, onGenerate, busy }: Props) {
             }}
           />
         </Row> */}
-  <button className="px-3 py-1.5 rounded bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700"
-    onClick={onGenerate} disabled={busy}>Generate</button>
+  <div className="flex gap-2">
+    <button className="px-3 py-1.5 rounded bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700"
+      onClick={onGenerate} disabled={busy}>Generate</button>
+    {onClearCustomImages && (
+      <button
+        type="button"
+        className="px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        onClick={onClearCustomImages}
+        disabled={!customImagesCount}
+        title={customImagesCount ? `Clear ${customImagesCount} custom image${customImagesCount === 1 ? '' : 's'}` : 'No custom images selected'}
+      >
+        Clear Art
+      </button>
+    )}
+  </div>
       </div>
     </div>
   )

@@ -28,7 +28,7 @@ function pickImages(card: any): { front?: string; back?: string | null } {
 async function fetchPage(url: string): Promise<any | null> {
   try {
     const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
-    if (!res.ok) return null
+    if (!res.ok) return null 
     return await res.json()
   } catch {
     return null

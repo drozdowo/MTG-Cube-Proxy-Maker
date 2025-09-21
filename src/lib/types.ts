@@ -19,4 +19,6 @@ export type ExportOptions = {
   printScaleCompensation?: number
   /** Printer hardware margin preset to auto-compensate shrink introduced by unprintable areas. */
   printerPreset?: 'none' | 'epson-normal' | 'epson-uniform'
+  /** When true (default), overlay faint cut margin guides around cards on generated outputs. */
+  drawCutMargins: boolean
 }
