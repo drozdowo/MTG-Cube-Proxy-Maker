@@ -2,6 +2,7 @@ import type { LayoutPage, LayoutPages, ExportOptions } from '@/lib/types'
 import { ensureCorsSafe } from '@/lib/image'
 import { pageService } from '@/lib/pageService'
 import { isSdAvailable, upscaleWithSd } from '@/lib/sd'
+import { emitUpscaleProgress } from '@/lib/progress'
 
 // --- Public API ---
 export async function exportToPdf(pages: LayoutPages, options: ExportOptions): Promise<Blob> {
@@ -418,6 +419,23 @@ async function maybeUpscalePages(pages: LayoutPage[], options: ExportOptions): P
   let succeeded = 0
   let skipped = 0
   const t0 = performance.now()
+  // Compute total unique images we expect to process (front + back, excluding default back heuristic)
+  const unique = new Set<string>()
+  for (const page of pages) {
+    for (const img of page.images) {
+      const url = img.url
+      if (!url) continue
+      if (page.role === 'back') {
+        if (defaultBackUrl && url === defaultBackUrl) continue
+        if (/cardback\.jpg/i.test(url)) continue
+      }
+      unique.add(url)
+    }
+  }
+  const total = unique.size
+  emitUpscaleProgress({ current: 0, total, done: total === 0 })
+  let current = 0
+
   for (const page of pages) {
     // We now upscale BOTH front and back images. Previous implementation only handled backs,
     // which meant no calls to the SD extras endpoint when only front pages were present.
@@ -432,7 +450,7 @@ async function maybeUpscalePages(pages: LayoutPage[], options: ExportOptions): P
       // Attempt upscale (cache first)
       if (cache.has(url)) {
         img.url = cache.get(url)!
-        skipped++ // treat as skipped (already processed)
+        skipped++
         continue
       }
       attempted++
@@ -444,8 +462,11 @@ async function maybeUpscalePages(pages: LayoutPage[], options: ExportOptions): P
       } else {
         console.warn('[SD] upscale failed', url, res.error)
       }
+      current++
+      emitUpscaleProgress({ current, total, done: current >= total })
     }
   }
   const dt = Math.round(performance.now() - t0)
   console.debug(`[SD] Upscale summary: attempted=${attempted} succeeded=${succeeded} skipped=${skipped} elapsedMs=${dt}`)
+  emitUpscaleProgress({ current: total, total, done: true })
 }

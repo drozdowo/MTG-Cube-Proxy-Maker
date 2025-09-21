@@ -8,6 +8,8 @@ import { parseInput } from '@/lib/parse'
 import { scryfallFetch } from '@/lib/scryfall'
 import { buildLayout } from '@/lib/layout'
 import { exportToPdf, exportToPngs, printPages } from '@/lib/export'
+import { onUpscaleProgress } from '@/lib/progress'
+import { UpscaleModal } from '@/components/UpscaleModal'
 import { pageService } from '@/lib/pageService'
 import type { LayoutPages } from '@/lib/types'
 import type { ExportOptions } from '@/lib/types'
@@ -38,6 +40,12 @@ export function App() {
   const [busy, setBusy] = useState(false)
   const [pages, setPages] = useState<LayoutPages | null>(null)
   const [issues, setIssues] = useState<string[]>([])
+  const [upscaleState, setUpscaleState] = useState<{ current: number; total: number; done: boolean }>({ current: 0, total: 0, done: true })
+
+  useEffect(() => {
+    const off = onUpscaleProgress(p => setUpscaleState(p))
+    return () => { off() }
+  }, [])
 
   // Modal state for picking alternate art
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -216,6 +224,7 @@ export function App() {
   }
 
   return (
+    <>
     <div className="grid [grid-template-columns:360px_1fr] gap-4 p-4">
       <div className="grid gap-3 content-start">
         <CardListInput value={raw} onChange={setRaw} errors={parsed.errors} />
@@ -276,6 +285,8 @@ export function App() {
         }}
       />
     </div>
+    <UpscaleModal open={!!(options.upscaleWithSD && !upscaleState.done && upscaleState.total > 0)} current={upscaleState.current} total={upscaleState.total} />
+    </>
   )
 }
 
