@@ -1,6 +1,7 @@
 import type { LayoutPage, LayoutPages, ExportOptions } from '@/lib/types'
 import { ensureCorsSafe } from '@/lib/image'
 import { pageService } from '@/lib/pageService'
+import { isSdAvailable, upscaleWithSd } from '@/lib/sd'
 
 // --- Public API ---
 export async function exportToPdf(pages: LayoutPages, options: ExportOptions): Promise<Blob> {
@@ -24,6 +25,16 @@ export async function exportToPngs(pages: LayoutPages, options: ExportOptions): 
     pages.forEach((p, i) => list.push({ idx: i + 1, role: p.role, page: p }))
   }
 
+  // Optional SD upscaling (mutates in-memory page images before rendering)
+  if (options.upscaleWithSD) {
+    const available = await isSdAvailable()
+    if (!available) {
+      alert('Stable Diffusion (Automatic1111) not detected at http://127.0.0.1:7860. Disable "Upscale with SD?" or start SD with --api.')
+      return []
+    }
+    await maybeUpscalePages(list.map(r => r.page), options)
+  }
+
   const blobs: Blob[] = []
   for (const { idx, role, page } of list) {
     const blob = await renderPageToPng(page, options)
@@ -43,6 +54,15 @@ export async function generatePngBlobs(pages: LayoutPages, options: ExportOption
     rebuild.forEach((p) => list.push(p))
   } else {
     pages.forEach((p) => list.push(p))
+  }
+
+  if (options.upscaleWithSD) {
+    const available = await isSdAvailable()
+    if (!available) {
+      alert('Stable Diffusion (Automatic1111) not detected at http://127.0.0.1:7860. Disable "Upscale with SD?" or start SD with --api.')
+      return []
+    }
+    await maybeUpscalePages(list, options)
   }
 
   const blobs: Blob[] = []
@@ -360,4 +380,72 @@ function triggerDownload(blob: Blob, filename: string) {
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+// --- SD Upscaling integration ---
+/**
+ * Mutates the provided layout pages in-place, replacing eligible image URLs with
+ * SD-upscaled data URLs. Only applies to back pages and excludes default / uploaded
+ * card back images. Heuristic for exclusion:
+ *  - If the image URL appears to be the globally selected default back (tracked via first pageService back slot)
+ *  - OR if the URL is a data: URI that originated from user upload (BackPicker) => treat as custom (we DO upscale custom per request?)
+ *
+ * User request clarified: "We only want to upscale the back images of actual cards, or custom images."
+ * Interpretation:
+ *  - Actual card fronts? (Request says back images of actual cards) -> We upscale backs derived from individual card backs (non-default) and also user-provided custom back. We'll therefore:
+ *    - Skip default provided cardback asset (detected by comparing to first back page slot or by filename 'cardback.jpg').
+ *    - Upscale any other back page images including data: URIs.
+ */
+async function maybeUpscalePages(pages: LayoutPage[], options: ExportOptions): Promise<void> {
+  // Identify the default back URL if present. We look at the application state via pageService.
+  let defaultBackUrl: string | null = null
+  const all = pageService.getAll()
+  // Find any slot whose url includes 'cardback.jpg' (imported default) as a heuristic
+  for (const rec of all) {
+    if (rec.side !== 'back') continue
+    for (const s of rec.slots) {
+      if (s?.url && /cardback\.jpg/i.test(s.url)) {
+        defaultBackUrl = s.url
+        break
+      }
+    }
+    if (defaultBackUrl) break
+  }
+
+  // Build a small cache so multiple references to the same image are only processed once.
+  const cache = new Map<string, string>() // original -> upscaled data URL
+  let attempted = 0
+  let succeeded = 0
+  let skipped = 0
+  const t0 = performance.now()
+  for (const page of pages) {
+    // We now upscale BOTH front and back images. Previous implementation only handled backs,
+    // which meant no calls to the SD extras endpoint when only front pages were present.
+    for (const img of page.images) {
+      const url = img.url
+      if (!url) { skipped++; continue }
+      // Skip default back asset heuristics ONLY for back pages
+      if (page.role === 'back') {
+        if (defaultBackUrl && url === defaultBackUrl) { skipped++; continue }
+        if (/cardback\.jpg/i.test(url)) { skipped++; continue }
+      }
+      // Attempt upscale (cache first)
+      if (cache.has(url)) {
+        img.url = cache.get(url)!
+        skipped++ // treat as skipped (already processed)
+        continue
+      }
+      attempted++
+      const res = await upscaleWithSd(url, { denoiseStrength: 0.12 })
+      if (res.ok && res.dataUrl) {
+        cache.set(url, res.dataUrl)
+        img.url = res.dataUrl
+        succeeded++
+      } else {
+        console.warn('[SD] upscale failed', url, res.error)
+      }
+    }
+  }
+  const dt = Math.round(performance.now() - t0)
+  console.debug(`[SD] Upscale summary: attempted=${attempted} succeeded=${succeeded} skipped=${skipped} elapsedMs=${dt}`)
 }

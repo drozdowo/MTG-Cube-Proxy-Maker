@@ -2,8 +2,6 @@
 
 Create printable front/back sheets of Magic: The Gathering proxies for personal use only.
 
-Legal: This tool is for personal, non-commercial use. Don’t sell or distribute proxies. Respect Wizards of the Coast’s policies and your local laws.
-
 ### Tech choice
 - Default: Vite + React (fast SPA, pure frontend)
 - Alternative: Next.js (if you want SSR/Edge and server routes)
@@ -166,3 +164,7 @@ If after printing and measuring a physical proxy the card is still undersized/ov
 ## Notes
 - UI library: choose a small, accessible set (e.g., Radix UI + Tailwind or Headless UI)
 - Keep everything client-side to avoid hosting complexity; consider Next.js only if SSR is needed later
+
+
+## For LLMs and AI
+- Don't run typecheck or anything afterwards.

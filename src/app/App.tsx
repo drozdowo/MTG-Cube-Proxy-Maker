@@ -30,6 +30,7 @@ export function App() {
     printScaleCompensation: undefined,
     printerPreset: 'epson-normal',
     drawCutMargins: true,
+    upscaleWithSD: false,
   })
 
   const parsed = useMemo(() => parseInput(raw), [raw])

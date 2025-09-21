@@ -18,6 +18,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/scryfall/, ''),
       },
+      // Stable Diffusion local API proxy to avoid browser CORS issues
+      '/sd': {
+        target: 'http://127.0.0.1:7860',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/sd/, ''),
+      },
     },
   },
 })

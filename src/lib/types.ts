@@ -21,4 +21,6 @@ export type ExportOptions = {
   printerPreset?: 'none' | 'epson-normal' | 'epson-uniform'
   /** When true (default), overlay faint cut margin guides around cards on generated outputs. */
   drawCutMargins: boolean
+  /** When true, future exports may run an SD-based upscaling pass on images (no-op currently). */
+  upscaleWithSD?: boolean
 }
