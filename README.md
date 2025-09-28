@@ -2,9 +2,15 @@
 
 ## Description
 
-NextJS (for no reason) application to take lists of cards, and create front/back sheets for printing proxies for use in a Cube. Has utilities like margin cut lines, printer scale compensation and optional image upscaling with Stable Diffusion.
+React application to take lists of cards, and create front/back sheets for printing proxies for use in a Cube. Has utilities like margin cut lines, printer scale compensation and optional image upscaling with Stable Diffusion.
 
 This application was mostly coded using GPT5, but required some manual work around scaling images properly and correctly exporting to PDFs, etc.
+
+## Future Features?
+- Host somewhere (so its more easily accessible)
+- Investigate non-SD upscaling (perhaps include in app)
+- More customization (for back cards)
+- Accomodate more than just MTG?
 
 ## Features and Utilities
 
