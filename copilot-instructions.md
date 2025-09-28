@@ -147,19 +147,16 @@ yarn dev
 2) Integrate Scryfall fetch with caching
 3) Layout engine (front only) → add back sheet + alignment
 4) PDF export with trim/registration marks
-5) Print presets
+5) Scale override tuning
 6) Token support and manual overrides
 
-### Printer Presets & Scaling
-Some consumer printers (e.g., Epson ET-2400 series) enforce unprintable hardware margins and will auto-scale content down when the page has zero CSS margin. This causes card images to print slightly undersized (e.g., 62.3 mm instead of 63 mm width).
+### Scale Override & Sizing
+Some consumer printers (e.g., Epson ET-2400 series) enforce unprintable hardware margins and may auto-scale content down when the page has zero CSS margin. If your printed card measures off the 63×88 mm target, use the Scale Override % to compensate.
 
-To counter this, a `printerPreset` option can be set:
-- `epson-normal`: Applies ~1.8% scale up (1.018)
-- `epson-uniform`: Applies ~2.4% scale up (1.024)
-
-You can also specify a manual `printScaleCompensation` (% override in Options panel). Leave the field blank to use the preset's automatic factor. The final applied scale is clamped between 0.95 and 1.10 to prevent extreme values.
-
-If after printing and measuring a physical proxy the card is still undersized/oversized, adjust the manual override in small 0.1% steps. Example: printed width = 62.6 mm, desired = 63.0 mm → needed factor ≈ 63 / 62.6 = 1.0064 (≈100.6%).
+Guidance:
+- Leave the field blank to use 100%.
+- If prints are undersized, increase by small increments (0.1–0.5%). If oversized, decrease.
+- Quick calculation: measure printed width and compute factor = desired / actual. Example: printed width = 62.6 mm, desired = 63.0 mm → factor ≈ 63 / 62.6 = 1.0064 (≈100.6%).
 
 ## Notes
 - UI library: choose a small, accessible set (e.g., Radix UI + Tailwind or Headless UI)

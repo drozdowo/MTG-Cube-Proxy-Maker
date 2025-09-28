@@ -1,3 +1,6 @@
+// DEPRECATED: This module has been superseded by exportService.ts which uses exportUtils helpers.
+// Please update imports to use `@/lib/exportService` for export/print functionality.
+// This file is kept temporarily for backward compatibility and may be removed in a future release.
 import type { LayoutPage, LayoutPages, ExportOptions } from '@/lib/types'
 import { ensureCorsSafe } from '@/lib/image'
 import { pageService } from '@/lib/pageService'
@@ -147,28 +150,13 @@ function computeLayoutMetrics(opts: ExportOptions) {
   const cardHMm = CARD_MM.h + 2 * Math.max(0, opts.bleed)
   const totalGridWMm = COLS * cardWMm
   const totalGridHMm = ROWS * cardHMm
-  // Derive scale: explicit override takes precedence, else use printer preset heuristics.
-  // Epson ET-2400 (approx) unprintable margins at "Normal" ~3.4mm (0.134in) each edge; "Uniform" a bit larger (~4mm) but consistent.
-  // We slightly upscale the grid so that after the printer driver auto-reduces to fit, the physical card size remains closer to 63x88mm.
-  // Empirically: scaling up 1.8% (Normal) or 2.4% (Uniform) compensates typical shrink.
-  let autoScale = 1
-  if (!opts.printScaleCompensation && opts.printerPreset) {
-    if (opts.printerPreset === 'epson-normal') autoScale = 1.018
-    else if (opts.printerPreset === 'epson-uniform') autoScale = 1.024
-  }
-  const scale = Math.max(0.95, Math.min(1.1, opts.printScaleCompensation || autoScale))
-  const maxMarginXMm = Math.max(0, (pageWMm - totalGridWMm * scale) / 2)
-  const maxMarginYMm = Math.max(0, (pageHMm - totalGridHMm * scale) / 2)
-  const requestedMarginMm = Math.max(0, opts.margin)
-  // Base margin is the user-requested margin capped so the grid still fits.
-  const baseMarginXMm = Math.min(requestedMarginMm, maxMarginXMm)
-  const baseMarginYMm = Math.min(requestedMarginMm, maxMarginYMm)
-  // Any remaining space (after accounting for the explicit margins on both sides) should be split
-  // equally so the grid is visually centered instead of hugging the top/left.
-  const leftoverXMm = pageWMm - totalGridWMm * scale - 2 * baseMarginXMm
-  const leftoverYMm = pageHMm - totalGridHMm * scale - 2 * baseMarginYMm
-  const marginXMm = baseMarginXMm + (leftoverXMm > 0 ? leftoverXMm / 2 : 0)
-  const marginYMm = baseMarginYMm + (leftoverYMm > 0 ? leftoverYMm / 2 : 0)
+  // Derive scale solely from explicit override (default 1.0). Clamp to a safe range.
+  const override = opts.printScaleCompensation ?? 1
+  const scale = Math.max(0.95, Math.min(1.1, override))
+  // Remove user-configured margins entirely and center the scaled grid on the page.
+  // This maximizes distance from all edges equally, keeping the grid as far from edges as possible.
+  const marginXMm = Math.max(0, (pageWMm - totalGridWMm * scale) / 2)
+  const marginYMm = Math.max(0, (pageHMm - totalGridHMm * scale) / 2)
   const offsetXMm = opts.alignmentOffsetX || 0
   const offsetYMm = opts.alignmentOffsetY || 0
   return {

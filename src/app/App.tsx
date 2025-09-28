@@ -7,7 +7,7 @@ import { CardArtSelector, type SelectedArt } from '@/components/CardArtSelector'
 import { parseInput } from '@/lib/parse'
 import { scryfallFetch } from '@/lib/scryfall'
 import { buildLayout } from '@/lib/layout'
-import { exportToPdf, exportToPngs, printPages } from '@/lib/export'
+import { exportToPdf, printPages } from '@/lib/exportService'
 import { onUpscaleProgress } from '@/lib/progress'
 import { UpscaleModal } from '@/components/UpscaleModal'
 import { pageService } from '@/lib/pageService'
@@ -22,16 +22,16 @@ export function App() {
   const [raw, setRaw] = useState(``)
   const [defaultBack, setDefaultBack] = useState<string | null>(cardback)
   const [options, setOptions] = useState<ExportOptions>({
-    dpi: 360,
+    dpi: 300,
     paper: 'Letter',
-    bleed: 1,
+    bleed: 0,
     margin: 10,
     orientation: 'portrait',
     alignmentOffsetX: 0,
     alignmentOffsetY: 0,
-    printScaleCompensation: undefined,
-    printerPreset: 'epson-normal',
+    printScaleCompensation: 1.025,
     drawCutMargins: true,
+    debugSizesOnPrint: false,
     upscaleWithSD: false,
   })
 
@@ -196,7 +196,7 @@ export function App() {
 
   async function handleExport() {
     if (!pages) return
-    await exportToPngs(pages, options)
+    await exportToPdf(pages, options)
   }
 
   function openPicker(pageNumber: number, cardNumber: number, cardName?: string) {

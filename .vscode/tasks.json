@@ -24,6 +24,15 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Typecheck project",
+			"type": "shell",
+			"command": "yarn",
+			"args": [
+				"typecheck"
+			],
+			"group": "build"
 		}
 	]
 }

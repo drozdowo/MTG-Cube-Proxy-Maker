@@ -33,20 +33,7 @@ export function OptionsPanel({ value, onChange, onGenerate, busy, onClearCustomI
             <option value="A4">A4</option>
           </select>
         </Row>
-        <Row
-          label="Printer Preset"
-          tooltip="Apply a known scaling profile for a specific printer; choose None / Custom to manually fine‑tune scaling."
-        >
-          <select
-            className="border border-gray-300 rounded px-2 py-1 w-full"
-            value={value.printerPreset || 'none'}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => update('printerPreset', e.target.value as any)}
-          >
-            <option value="none">None / Custom</option>
-            <option value="epson-normal">Epson ET-2400 Normal</option>
-            <option value="epson-uniform">Epson ET-2400 Uniform</option>
-          </select>
-        </Row>
+        {/* Printer Preset removed: scaling is now driven only by Scale Override %. */}
         <Row
           label="DPI"
           tooltip="Dots per inch for rendered export; higher = more detail & larger file size. Typical: 300."
@@ -91,6 +78,17 @@ export function OptionsPanel({ value, onChange, onGenerate, busy, onClearCustomI
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('drawCutMargins', e.target.checked)}
           />
         </Row>
+        {/* <Row
+          label="Debug sizes on print"
+          tooltip={"If enabled, along with Draw Cut Margins it will draw the size of the cards. This will help debug printer scaling issues and help you land on a value for 'Scale Override %'."}
+        >
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={!!value.debugSizesOnPrint}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('debugSizesOnPrint', e.target.checked as any)}
+          />
+        </Row> */}
         <Row
           label="Upscale with SD?"
           tooltip={'On Generate/Export this will utilize Stable Diffusion running locally (localhost:7860) with the "--api" arguments to upscale your images. Helps reduce graininess and improve text clarity using Scryfall images.'}
@@ -104,7 +102,7 @@ export function OptionsPanel({ value, onChange, onGenerate, busy, onClearCustomI
         </Row>
         <Row
           label="Scale Override %"
-          tooltip="Manual scaling percentage. Leave blank to auto‑apply preset compensation; adjust if printed cards measure off."
+          tooltip="Manual scaling percentage applied to the entire grid. Leave blank for 100%. Increase if prints are undersized; decrease if oversized."
         >
           <input
             className="border border-gray-300 rounded px-2 py-1 w-full"
@@ -113,7 +111,7 @@ export function OptionsPanel({ value, onChange, onGenerate, busy, onClearCustomI
             max={110}
             step={0.1}
             value={Math.round(((value.printScaleCompensation ?? 0) * 100 + Number.EPSILON) * 10) / 10 || ''}
-            placeholder={value.printerPreset === 'epson-normal' ? '≈101.8%' : value.printerPreset === 'epson-uniform' ? '≈102.4%' : '100%'}
+            placeholder={'100%'}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
               const pct = Number(e.target.value)
               if (!e.target.value) {
@@ -126,7 +124,8 @@ export function OptionsPanel({ value, onChange, onGenerate, busy, onClearCustomI
           />
         </Row>
         <div className="text-xs text-gray-500 -mt-1 mb-1">
-          Leave blank to auto scale based on preset. Override only if physical cards print undersized/oversized.
+          Leave blank to use 100%. Override only if physical cards print undersized/oversized. 102.5% works for me on an Epson ET-2400 printer, printing via the 'Print' functionality, or by exporting to PDF.
+          To identify a good value, use your browser's Print function to print a test page then measure the printed card size and adjust the percentage accordingly. (ie: target should be 63mm across, if it prints 61.5mm, try 63/61.5 = 1.025 = 102.5%~)
         </div>
         {/* <Row label="Print scale comp. (%)">
           <input
